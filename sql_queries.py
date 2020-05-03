@@ -13,6 +13,7 @@ artist_table_drop = "DROP TABLE IF EXISTS artist;"
 time_table_drop = "DROP TABLE IF EXISTS time;"
 
 # create tables
+# sorting keys?
 staging_events_table_create = ("""
 CREATE TABLE IF NOT EXISTS events (
 artist VARCHAR,
@@ -50,7 +51,7 @@ year INT
 """)
 
 songplay_table_create = ("""
-CREATE TABLE IF NOT EXISTS songplay (
+CREATE TABLE IF NOT EXISTS songplays (
 songplay_id INT PRIMARY KEY NOT NULL,
 start_time INT NOT NULL,
 user_id INT FOREIGN KEY NOT NULL,
@@ -123,7 +124,7 @@ gzip region 'us-west-2';
 # join for song id??
 # end tables inserts
 songplay_table_insert = ("""
-INSERT INTO songplay
+INSERT INTO songplays
 (start_time, user_id, level, song_id,
 artist_id, session_id, location, user_agent)
 SELECT e.ts AS start_time, e.userid AS user_id,
