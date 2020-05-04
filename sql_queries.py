@@ -1,46 +1,49 @@
 import configparser
 
 config = configparser.ConfigParser()
-config.read(dwh.cfg)
+config.read_file(open('dwh.cfg'))
 
 ARN=config.get('IAM_ROLE', 'ARN')
 LOG_DATA=config.get('S3', 'LOG_DATA')
+LOG_JSONPATH=config.get('S3','LOG_JSONPATH')
+SONG_DATA=config.get('S3', 'SONG_DATA')
 
 # drop tables
-staging_events_table_drop = "DROP TABLE IF EXSITS staging_events;"
+staging_events_table_drop = "DROP TABLE IF EXISTS staging_events;"
 staging_songs_table_drop = "DROP TABLE IF EXISTS staging_songs;"
 songplay_table_drop = "DROP TABLE IF EXISTS songplay;"
-user_table_drop = "DROP TABLE IF EXISTS user;"
-song_table_drop = "DROP TABLE IF EXISTS song;"
-artist_table_drop = "DROP TABLE IF EXISTS artist;"
+user_table_drop = "DROP TABLE IF EXISTS users;"
+song_table_drop = "DROP TABLE IF EXISTS songs;"
+artist_table_drop = "DROP TABLE IF EXISTS artists;"
 time_table_drop = "DROP TABLE IF EXISTS time;"
 
 # create tables
 # sorting keys?
 staging_events_table_create = ("""
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS staging_events (
+index INT,
 artist VARCHAR,
 auth VARCHAR,
 firstName VARCHAR,
 gender VARCHAR,
-ItemInSession INT,
+ItemInSession VARCHAR,
 lastName VARCHAR,
-length FLOAT,
+length VARCHAR,
 level VARCHAR,
 location VARCHAR,
 page VARCHAR,
-registration INT,
-sessionid INT,
+registration VARCHAR,
+sessionId VARCHAR,
 song VARCHAR,
-status INT,
-ts TIMESTAMP,
+status VARCHAR,
+ts BIGINT,
 userAgent VARCHAR,
-userid INT
+userId VARCHAR
 );
 """)
 
 staging_songs_table_create = ("""
-CREATE TABLE IF NOT EXISTS songs(
+CREATE TABLE IF NOT EXISTS staging_songs(
 artist_id VARCHAR NOT NULL,
 artist_latitude INT,
 artist_longitude INT,
@@ -53,18 +56,19 @@ year INT
 );
 """)
 
+# possibly diststyle all
 songplay_table_create = ("""
 CREATE TABLE IF NOT EXISTS songplays (
-songplay_id INT PRIMARY KEY NOT NULL,
+songplay_id INT IDENTITY(0,1) NOT NULL,
 start_time INT NOT NULL,
-user_id INT FOREIGN KEY NOT NULL,
+user_id INT NOT NULL,
 level INT NOT NULL,
 song_id INT NOT NULL,
 artist_id INT NOT NULL,
 session_id INT NOT NULL,
-location FLOAT NOT NULL,
-user_agent VARCHAR NOT NULL
-UNIQUE(start_time,user_id, session_id)
+location VARCHAR NOT NULL,
+user_agent VARCHAR NOT NULL,
+UNIQUE (start_time,user_id, session_id)
 );
 """)
 
@@ -82,7 +86,7 @@ song_table_create = ("""
 CREATE TABLE IF NOT EXISTS songs (
 song_id INT PRIMARY KEY NOT NULL,
 title VARCHAR NOT NULL,
-artist_id FOREIGN KEY NOT NULL,
+artist_id INT NOT NULL,
 year INT NOT NULL,
 duration DECIMAL NOT NULL
 );
@@ -112,15 +116,19 @@ weekday INT NOT NULL
 
 # staging tables
 staging_events_copy = ("""
-COPY events FROM {}
+COPY staging_events
+FROM {}
 credentials 'aws_iam_role={}'
-gzip region 'us-west-2';
-""").format(LOG_DATA, ARN)
+json {}
+region 'us-west-2';
+""").format(LOG_DATA, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
-COPY songs FROM {}
+COPY staging_songs
+FROM {}
 credentials 'aws_iam_role={}'
-gzip region 'us-west-2';
+json
+region 'us-west-2';
 """).format(SONG_DATA, ARN)
 
 # WHERE action is nextsong
@@ -130,10 +138,14 @@ songplay_table_insert = ("""
 INSERT INTO songplays
 (start_time, user_id, level, song_id,
 artist_id, session_id, location, user_agent)
-SELECT e.ts AS start_time, e.userid AS user_id,
-e.level, s.song_id,
-s.artist_id, e.sessionid AS session_id,
-e.location, e.userAgent AS user_agent
+SELECT e.ts AS start_time,
+CAST(e.userId AS INTEGER) AS user_id,
+CAST(e.level AS INTEGER),
+CAST(s.song_id AS INTEGER),
+CAST(s.artist_id AS INTEGER),
+CAST(e.sessionId AS INTEGER) AS session_id,
+e.location,
+e.userAgent AS user_agent
 FROM staging_events e
 JOIN staging_songs s
 ON s.title = e.song
@@ -146,10 +158,10 @@ user_table_insert = ("""
 INSERT INTO users
 (user_id, first_name,
 last_name, gender, level)
-SELECT userid AS user_id,
+SELECT CAST(userId AS INTEGER) AS user_id,
 firstName AS first_name,
 lastName AS last_name,
-gender, level
+gender, CAST(level AS INTEGER)
 FROM staging_events
 ON CONFLICT ON CONSTRAINT users_pkey
 DO UPDATE SET level=EXCLUDED.level;
@@ -158,7 +170,11 @@ DO UPDATE SET level=EXCLUDED.level;
 song_table_insert = ("""
 INSERT INTO songs
 (song_id, title, artist_id, year, duration)
-SELECT song_id, title, artist_id, year, duration
+SELECT CAST(song_id AS INTEGER),
+title,
+CAST(artist_id AS INTEGER),
+CAST(year AS INTEGER),
+CAST(duration AS DECIMAL(2,5))
 FROM staging_songs
 ON CONFLICT ON CONSTRAINT songs_pkey
 DO_NOTHING;
@@ -167,8 +183,11 @@ DO_NOTHING;
 artist_table_insert = ("""
 INSERT INTO artists
 (artist_id, artist_name, location, latitude, longitude)
-SELECT artist_id, artist_name,
-artist_location, artist_latitude, artist_longitude
+SELECT CAST(artist_id AS INTEGER),
+artist_name,
+artist_location,
+CAST(artist_latitude AS FLOAT),
+CAST(artist_longitude AS FLOAT)
 FROM staging_songs
 ON CONFLICT ON CONTSTAINT artist_pkey
 DO NOTHING;
@@ -177,23 +196,52 @@ DO NOTHING;
 time_table_insert = ("""
 INSERT INTO time
 (start_time, hour, day, week, year, weekday)
-SELECT ts AS start_time,
-EXTRACT(hour FROM ts) AS hour,
-EXTRACT(day FROM ts) AS day,
-EXTRACT(week FROM ts) AS week,
-EXTRACT(year FROM ts) AS year,
-EXTRACT(weekday FROM ts) AS weekday
-FROM staging_events
+SELECT s.start_time,
+EXTRACT(hour FROM s.start_time) AS hour,
+EXTRACT(day FROM s.start_time) AS day,
+EXTRACT(week FROM s.start_time) AS week,
+EXTRACT(year FROM s.start_time) AS year,
+EXTRACT(weekday FROM s.start_time) AS weekday
+FROM
+(SELECT TIMESTAMP'epoch'+ start_time/1000*INTERVAL'1 second'
+ AS start_time
+ FROM songplays) s
 WHERE page = 'NextSong'
 ON CONFLICT ON CONSTRAINT time_pkey
 DO NOTHING;
 """)
 
 # queries
-create_table_queries = [staging_songs_table_create, staging_songs_table_create, songplay_table_create, user_table_create]
+create_table_queries = [staging_events_table_create, staging_songs_table_create, songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
 drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
-copy_table_queries = [staging_event_copy , staging_songs_copy]
+copy_table_queries = [staging_events_copy , staging_songs_copy]
 insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
+
+
+# # create tables
+# # sorting keys?
+# staging_events_table_create = ("""
+# CREATE TABLE IF NOT EXISTS events (
+# index INT,
+# artist VARCHAR,
+# auth VARCHAR,
+# firstName VARCHAR,
+# gender VARCHAR,
+# ItemInSession INT,
+# lastName VARCHAR,
+# length FLOAT,
+# level VARCHAR,
+# location VARCHAR,
+# page VARCHAR,
+# registration INT,
+# sessionid INT,
+# song VARCHAR,
+# status INT,
+# ts TIMESTAMP,
+# userAgent VARCHAR,
+# userid INT
+# );
+# """)
 
 
 # end tables inserts used in local postgres db
