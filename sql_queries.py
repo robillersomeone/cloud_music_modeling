@@ -3,6 +3,9 @@ import configparser
 config = configparser.ConfigParser()
 config.read(dwh.cfg)
 
+ARN=config.get('IAM_ROLE', 'ARN')
+LOG_DATA=config.get('S3', 'LOG_DATA')
+
 # drop tables
 staging_events_table_drop = "DROP TABLE IF EXSITS staging_events;"
 staging_songs_table_drop = "DROP TABLE IF EXISTS staging_songs;"
