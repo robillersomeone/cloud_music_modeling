@@ -14,6 +14,8 @@ Using
 
 The data is modeled in a star schema
 
+<img src="./imgs/star_db.png" height="400px" width="600px">
+
 fact table
 - songlplays
 

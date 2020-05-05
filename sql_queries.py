@@ -60,11 +60,11 @@ year INT
 songplay_table_create = ("""
 CREATE TABLE IF NOT EXISTS songplays (
 songplay_id INT IDENTITY(0,1) NOT NULL,
-start_time INT NOT NULL,
+start_time TIMESTAMP NOT NULL,
 user_id INT NOT NULL,
-level INT NOT NULL,
-song_id INT NOT NULL,
-artist_id INT NOT NULL,
+level VARCHAR NOT NULL,
+song_id VARCHAR NOT NULL,
+artist_id VARCHAR NOT NULL,
 session_id INT NOT NULL,
 location VARCHAR NOT NULL,
 user_agent VARCHAR NOT NULL,
@@ -78,15 +78,15 @@ user_id INT PRIMARY KEY NOT NULL,
 first_name VARCHAR NOT NULL,
 last_name VARCHAR NOT NULL,
 gender VARCHAR NOT NULL,
-level INT NOT NULL
+level VARCHAR NOT NULL
 );
 """)
 
 song_table_create = ("""
 CREATE TABLE IF NOT EXISTS songs (
-song_id INT PRIMARY KEY NOT NULL,
+song_id VARCHAR PRIMARY KEY NOT NULL,
 title VARCHAR NOT NULL,
-artist_id INT NOT NULL,
+artist_id VARCHAR NOT NULL,
 year INT NOT NULL,
 duration DECIMAL NOT NULL
 );
@@ -94,7 +94,7 @@ duration DECIMAL NOT NULL
 
 artist_table_create = ("""
 CREATE TABLE IF NOT EXISTS artists (
-artist_id INT PRIMARY KEY NOT NULL,
+artist_id VARCHAR PRIMARY KEY NOT NULL,
 artist_name VARCHAR NOT NULL,
 location VARCHAR,
 latitude FLOAT,
@@ -104,7 +104,7 @@ longitude FLOAT
 
 time_table_create = ("""
 CREATE TABLE IF NOT EXISTS time (
-start_time DATETIME PRIMARY KEY NOT NULL,
+start_time TIMESTAMP PRIMARY KEY NOT NULL,
 hour INT NOT NULL,
 day INT NOT NULL,
 week VARCHAR NOT NULL,
@@ -141,9 +141,9 @@ INSERT INTO songplays
 artist_id, session_id, location, user_agent)
 SELECT e.ts AS start_time,
 CAST(e.userId AS INTEGER) AS user_id,
-CAST(e.level AS INTEGER),
-CAST(s.song_id AS INTEGER),
-CAST(s.artist_id AS INTEGER),
+e.level,
+s.song_id,
+s.artist_id,
 CAST(e.sessionId AS INTEGER) AS session_id,
 e.location,
 e.userAgent AS user_agent
@@ -171,11 +171,11 @@ DO UPDATE SET level=EXCLUDED.level;
 song_table_insert = ("""
 INSERT INTO songs
 (song_id, title, artist_id, year, duration)
-SELECT CAST(song_id AS INTEGER),
+SELECT song_id,
 title,
-CAST(artist_id AS INTEGER),
-CAST(year AS INTEGER),
-CAST(duration AS DECIMAL(2,5))
+artist_id,
+year,
+CAST(duration AS DECIMAL(8,5))
 FROM staging_songs
 ON CONFLICT ON CONSTRAINT songs_pkey
 DO_NOTHING;
