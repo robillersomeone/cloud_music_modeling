@@ -36,7 +36,7 @@ registration VARCHAR,
 sessionId VARCHAR,
 song VARCHAR,
 status VARCHAR,
-ts BIGINT,
+ts TIMESTAMP,
 userAgent VARCHAR,
 userId VARCHAR
 );
@@ -121,6 +121,7 @@ FROM {}
 credentials 'aws_iam_role={}'
 json {}
 region 'us-west-2';
+TIMEFORMAT 'epochmillisecs'
 """).format(LOG_DATA, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
