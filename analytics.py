@@ -17,7 +17,7 @@ def main():
     """
     main function
     read config, connect to redshift cluster
-
+    query normalized tables in redshift
     closes the connection to the database
     """
     config = configparser.ConfigParser()
